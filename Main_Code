@@ -1,0 +1,228 @@
+def gdp_bracket_creator(gdp, data):
+  gdp_2018 = gdp[['Country Code', '2018']]
+  gdp_2018 = gdp_2018.dropna()
+  merged = data.merge(gdp_2018, left_on = 'Country Code', right_on = 'Country Code')
+  mean_gdp = merged['2018'].mean()
+  gdp_spliter = mean_gdp / 2
+  high_bracket = mean_gdp + gdp_spliter
+  low_bracket = mean_gdp - gdp_spliter
+  conditions = [merged['2018'] > high_bracket,
+                (merged['2018'] > mean_gdp) & (merged['2018'] <= high_bracket),
+                (merged['2018'] > low_bracket) & (merged['2018'] <= mean_gdp),
+                merged['2018'] < low_bracket]
+  choices = ['High GDP', 'High Mid GDP', 'Low Mid GDP', 'Low GDP']
+  color_choices = ['coral', 'royalblue', 'limegreen', 'mediumorchid']
+  merged['GDP Bracket'] = np.select(conditions, choices)
+  merged['GDP Color'] = np.select(conditions, color_choices)
+  merged.rename(columns={'2018':'2018 Total GDP'}, inplace = True)
+  return merged
+  
+
+def mortality_and_covid(gdp, cases, deaths, recent_date):
+  deaths.rename(columns={recent_date: 'Recent Deaths'}, inplace=True)
+  country_deaths = deaths.loc[1:, ['Recent Deaths', 'Country Code']]
+  country_deaths = country_deaths.groupby('Country Code')['Recent Deaths'].sum()
+  country_deaths = country_deaths.to_frame()
+  cases.rename(columns={recent_date: 'Recent Cases'}, inplace=True)
+  country_cases = cases.loc[1:, ['Recent Cases', 'Country Code']]
+  country_cases = country_cases.groupby('Country Code')['Recent Cases'].sum()
+  country_cases = country_cases.to_frame()
+  death_pop = country_deaths.merge(country_cases, left_on = 'Country Code', right_on = 'Country Code')
+  death_pop['Mortality Rate of Infected(Percentage)'] = (death_pop['Recent Deaths'] / death_pop['Recent Cases']) * 100
+  death_pop_gdp = gdp_bracket_creator(gdp, death_pop)
+
+  sns.catplot(data = death_pop_gdp, color = 'b', x = 'GDP Bracket',
+              y = 'Mortality Rate of Infected(Percentage)', kind = 'bar')
+  plt.title('Mortality Rate of Infected by GDP')
+  plt.xlabel('GDP Brackets')
+  plt.ylabel('Mortality Rate of Infected(Percentage)')
+
+  high_gdp_countries = death_pop_gdp[death_pop_gdp['GDP Bracket'] == 'High GDP']
+  sns.relplot(data = high_gdp_countries, color = 'b', x = '2018 Total GDP', y = 'Mortality Rate of Infected(Percentage)')
+  plt.title('Mortality Rate of Infected For High GDP Countries')
+  plt.xlabel('GDP')
+  plt.ylabel('Mortality Rate of Infected(Percentage)')
+  plt.savefig('High GDP and Number of Covid-19 Deaths.png')
+
+  high_mid_gdp_countries = death_pop_gdp[death_pop_gdp['GDP Bracket'] == 'High Mid GDP']
+  sns.relplot(data = high_mid_gdp_countries, color = 'b', x = '2018 Total GDP', y = 'Mortality Rate of Infected(Percentage)')
+  plt.title('Mortality Rate of Infected For High Mid GDP Countries')
+  plt.xlabel('GDP')
+  plt.ylabel('Mortality Rate of Infected(Percentage)')
+  plt.savefig('High Mid GDP and Number of Covid-19 Deaths.png')
+
+  low_mid_gdp_countries = death_pop_gdp[death_pop_gdp['GDP Bracket'] == 'Low Mid GDP']
+  sns.relplot(data = low_mid_gdp_countries, color = 'b', x = '2018 Total GDP', y = 'Mortality Rate of Infected(Percentage)')
+  plt.title('Mortality Rate of Infected For Low Mid GDP Countries')
+  plt.xlabel('GDP')
+  plt.ylabel('Mortality Rate of Infected(Percentage)')
+  plt.savefig('Low Mid GDP and Number of Covid-19 Deaths.png')
+
+  low_gdp_countries = death_pop_gdp[death_pop_gdp['GDP Bracket'] == 'Low GDP']
+  sns.relplot(data = low_gdp_countries, color = 'b', x = '2018 Total GDP', y = 'Mortality Rate of Infected(Percentage)')
+  plt.title('Mortality Rate of Infected For Low GDP Countries')
+  plt.xlabel('GDP')
+  plt.ylabel('Mortality Rate of Infected(Percentage)')
+  plt.savefig('Low GDP and Number of Covid-19 Deaths.png')
+
+  fig = go.Figure(data=go.Scatter(x=death_pop_gdp['2018 Total GDP'],
+                                y=death_pop_gdp['Mortality Rate of Infected(Percentage)'],
+                                mode='markers',
+                                text=death_pop_gdp['Country Code'],
+                                marker_color=death_pop_gdp['GDP Color']))
+  fig.add_trace(go.Scatter(
+    x=death_pop_gdp['2018 Total GDP'] == "High GDP",
+    y=death_pop_gdp['Mortality Rate of Infected(Percentage)'],
+    name="High GDP",
+    mode="markers",
+    marker=dict(color="coral", size=10)))
+  fig.add_trace(go.Scatter(
+    x=death_pop_gdp['2018 Total GDP'] == "High GDP",
+    y=death_pop_gdp['Mortality Rate of Infected(Percentage)'],
+    name="High Mid GDP",
+    mode="markers",
+    marker=dict(color="royalblue", size=10)))
+  fig.add_trace(go.Scatter(
+    x=death_pop_gdp['2018 Total GDP'] == "High GDP",
+    y=death_pop_gdp['Mortality Rate of Infected(Percentage)'],
+    name="Low Mid GDP",
+    mode="markers",
+    marker=dict(color="limegreen", size=10)))
+  fig.add_trace(go.Scatter(
+    x=death_pop_gdp['2018 Total GDP'] == "High GDP",
+    y=death_pop_gdp['Mortality Rate of Infected(Percentage)'],
+    name="Low GDP",
+    mode="markers",
+    marker=dict(color="mediumorchid", size=10)))
+  fig.update_layout(
+    title="GDP and Covid-19 Deaths",
+    xaxis_title="Date",
+    yaxis_title="Number of Deaths")
+  fig.show()
+  
+  
+def gdp_and_covid(gdp, cases, world_pop, date):
+  covid_cases = cases.loc[1:, [date, 'Country Code', 'Country/Region']]
+  covid_cases = covid_cases.groupby('Country Code')[date].sum()
+  covid_cases = covid_cases.to_frame()
+  world_pop_2018 = world_pop[world_pop['Year'] == 2018]
+  cases_capita = covid_cases.merge(world_pop_2018, left_on = 'Country Code', right_on = 'Country Code')
+  cases_capita['Per Capita Cases'] = (cases_capita[date] / cases_capita['Value']) * 100
+  cases_capita_world = gdp_bracket_creator(gdp, cases_capita)
+
+  sns.catplot(data = cases_capita_world, color = 'b', kind = 'bar', x = 'GDP Bracket', y = 'Per Capita Cases')
+  plt.title('Per Capita Percentage of Covid-19 Cases by GDP')
+  plt.xlabel('GDP Brackets')
+  plt.ylabel('Per Capita Cases (Percentage)')
+  plt.savefig('Grouped GDP and Number of Covid-19 Cases.png')
+
+  fig = go.Figure(data=go.Scatter(x=cases_capita_world['2018 Total GDP'],
+                                y=cases_capita_world['Per Capita Cases'],
+                                mode='markers',
+                                text=cases_capita_world['Country Code'],
+                                marker_color = cases_capita_world['GDP Color']))
+  fig.add_trace(go.Scatter(
+    x=cases_capita_world['2018 Total GDP'] == "High GDP",
+    y=cases_capita_world['Per Capita Cases'],
+    name="High GDP",
+    mode="markers",
+    marker=dict(color="coral", size=10)))
+  fig.add_trace(go.Scatter(
+    x=cases_capita_world['2018 Total GDP'] == "High GDP",
+    y=cases_capita_world['Per Capita Cases'],
+    name="High Mid GDP",
+    mode="markers",
+    marker=dict(color="royalblue", size=10)))
+  fig.add_trace(go.Scatter(
+    x=cases_capita_world['2018 Total GDP'] == "High GDP",
+    y=cases_capita_world['Per Capita Cases'],
+    name="Low Mid GDP",
+    mode="markers",
+    marker=dict(color="limegreen", size=10)))
+  fig.add_trace(go.Scatter(
+    x=cases_capita_world['2018 Total GDP'] == "High GDP",
+    y=cases_capita_world['Per Capita Cases'],
+    name="Low GDP",
+    mode="markers",
+    marker=dict(color="mediumorchid", size=10)))
+  fig.update_layout(
+    title="GDP and Covid-19 Cases",
+    xaxis_title="Date",
+    yaxis_title="Number of Cases")
+  fig.show()
+
+  high_gdp_countries = cases_capita_world[cases_capita_world['GDP Bracket'] == 'High GDP']
+  sns.relplot(data = high_gdp_countries, color = 'b', x = '2018 Total GDP', y = 'Per Capita Cases')
+  plt.title('Per Capita Percentage of Covid-19 Cases For High GDP Countries')
+  plt.xlabel('GDP')
+  plt.ylabel('Per Capita Cases (Percentage)')
+  plt.savefig('High GDP and Number of Covid-19 Cases.png')
+
+  high_mid_gdp_countries = cases_capita_world[cases_capita_world['GDP Bracket'] == 'High Mid GDP']
+  sns.relplot(data = high_mid_gdp_countries, color = 'b', x = '2018 Total GDP', y = 'Per Capita Cases')
+  plt.title('Per Capita Percentage of Covid-19 Cases For High Mid GDP Countries')
+  plt.xlabel('GDP')
+  plt.ylabel('Per Capita Cases (Percentage)')
+  plt.savefig('High Mid GDP and Number of Covid-19 Cases.png')
+
+  low_mid_gdp_countries = cases_capita_world[cases_capita_world['GDP Bracket'] == 'Low Mid GDP']
+  sns.relplot(data = low_mid_gdp_countries, color = 'b', x = '2018 Total GDP', y = 'Per Capita Cases')
+  plt.title('Per Capita Percentage of Covid-19 Cases For Low Mid GDP Countries')
+  plt.xlabel('GDP')
+  plt.ylabel('Per Capita Cases (Percentage)')
+  plt.savefig('Low Mid GDP and Number of Covid-19 Cases.png')
+  
+  low_gdp_countries = cases_capita_world[cases_capita_world['GDP Bracket'] == 'Low GDP']
+  sns.relplot(data = low_gdp_countries, color = 'b', x = '2018 Total GDP', y = 'Per Capita Cases')
+  plt.title('Per Capita Percentage of Covid-19 Cases For Low GDP Countries')
+  plt.xlabel('GDP')
+  plt.ylabel('Per Capita Cases (Percentage)')
+  plt.savefig('Low GDP and Number of Covid-19 Cases.png')
+  
+  
+def covid_over_time(gdp, cases, world_pop, date):
+  covid_cases = cases.loc[1:, :]
+  covid_cases = covid_cases.groupby('Country Code', as_index=False).sum()
+  world_pop_2018 = world_pop[world_pop['Year'] == 2018]
+  cases_capita = covid_cases.merge(world_pop_2018, left_on = 'Country Code', right_on = 'Country Code')
+  cases_capita_world = gdp_bracket_creator(gdp, cases_capita)
+  cases_capita_world = cases_capita_world.groupby('GDP Bracket').sum()
+  cases_capita_world = cases_capita_world.loc[:, '1/22/20' : date]
+  cases_capita_world = cases_capita_world.T
+  cases_capita_world.reset_index(inplace=True)
+  cases_capita_world = cases_capita_world.loc[1:, :]
+  cases_capita_world.rename(columns={'index':'Date'}, inplace = True)
+  fig = go.Figure()
+  fig.add_trace(go.Scatter(x=cases_capita_world['Date'], y=cases_capita_world['High GDP'],
+                    mode='lines',
+                    name='High GDP'))
+  fig.add_trace(go.Scatter(x=cases_capita_world['Date'], y=cases_capita_world['High Mid GDP'],
+                    mode='lines',
+                    name='High Mid GDP'))
+  fig.add_trace(go.Scatter(x=cases_capita_world['Date'], y=cases_capita_world['Low Mid GDP'],
+                    mode='lines',
+                    name='Low Mid GDP'))
+  fig.add_trace(go.Scatter(x=cases_capita_world['Date'], y=cases_capita_world['Low GDP'],
+                    mode='lines',
+                    name='Low GDP'))
+  fig.update_layout(
+    title="Covid-19 Cases Over Time by GDP",
+    xaxis_title="Date",
+    yaxis_title="Number of Cases")
+  fig.show()
+  
+  
+def main():
+  unemployment = pd.read_csv('Unemployment.csv')
+  cases = pd.read_csv('Covid19_cases.csv')
+  gdp = pd.read_csv('Global_GDP.csv', encoding='cp1252')
+  world_pop = pd.read_csv('population.csv', encoding='cp1252')
+  deaths = pd.read_csv('Covid19_deaths.csv')
+  most_recent_date = '6/7/20'
+  gdp_and_covid(gdp, cases, world_pop, most_recent_date)
+  #covid_over_time(gdp, cases, world_pop, most_recent_date)
+  mortality_and_covid(gdp, cases, deaths, most_recent_date)
+
+
+if __name__ == '__main__':
+  main()
